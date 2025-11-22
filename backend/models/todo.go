@@ -38,16 +38,18 @@ type UpdateStatusInput struct {
 	Version   int  `json:"version" binding:"required"`
 }
 
-// Create 创建待办事项
-func (t *Todo) Create() error {
-	// 设置默认值
-	if t.Category == "" {
-		t.Category = "life"
-	}
-	if t.Priority < 0 {
-		t.Priority = 0
-	}
+// UpdateTodoInput 更新待办事项的输入结构
+type UpdateTodoInput struct {
+	Title       string `json:"title" binding:"required,min=1,max=255"`
+	Description string `json:"description"` // 描述非必须
+	Category    string `json:"category" binding:"required,oneof=work study life"`
+	Priority    int    `json:"priority" binding:"required,min=0,max=5"`
+	Version     int    `json:"version" binding:"required"` // 乐观锁版本号
+}
 
+// Create 创建待办事项
+// 11.22调整：默认值在Service层设置，这里只负责数据库操作
+func (t *Todo) Create() error {
 	result := config.DB.Create(t)
 	return result.Error
 }
@@ -86,7 +88,32 @@ func GetByID(id uint) (*Todo, error) {
 	return &todo, nil
 }
 
-// UpdateStatus 更新完成状态
+// Update 更新待办事项（带乐观锁）
+// 可以更新标题、描述、分类、优先级
+func (t *Todo) Update(id uint, title, description, category string, priority, version int) error {
+	result := config.DB.Model(&Todo{}).
+		Where("id = ? AND version = ?", id, version). // 乐观锁：同时检查 id 和 version
+		Updates(map[string]interface{}{
+			"title":       title,
+			"description": description,
+			"category":    category,
+			"priority":    priority,
+			"version":     version + 1, // 版本号 +1
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	// 检查是否有行被更新（乐观锁检查）
+	if result.RowsAffected == 0 {
+		return errors.New("version conflict: data has been modified by another user")
+	}
+
+	return nil
+}
+
+// UpdateStatus 更新完成状态（带乐观锁）
 func (t *Todo) UpdateStatus(id uint, completed bool, version int) error {
 	result := config.DB.Model(&Todo{}).
 		Where("id = ? AND version = ?", id, version). // 假如用户同时多设备点击更新完成状态，那么只有一个设备会成功，另一个设备在where语句查不出来
