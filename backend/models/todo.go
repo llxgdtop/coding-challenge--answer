@@ -2,8 +2,11 @@ package models
 
 import (
 	"backend/config"
+	customerrors "backend/errors"
 	"errors"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // Todo 待办事项模型结构体
@@ -83,6 +86,9 @@ func GetByID(id uint) (*Todo, error) {
 	var todo Todo
 	result := config.DB.First(&todo, id)
 	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, customerrors.ErrTodoNotFound
+		}
 		return nil, result.Error
 	}
 	return &todo, nil
@@ -107,7 +113,7 @@ func (t *Todo) Update(id uint, title, description, category string, priority, ve
 
 	// 检查是否有行被更新（乐观锁检查）
 	if result.RowsAffected == 0 {
-		return errors.New("version conflict: data has been modified by another user")
+		return customerrors.ErrVersionConflict
 	}
 
 	return nil
@@ -128,7 +134,7 @@ func (t *Todo) UpdateStatus(id uint, completed bool, version int) error {
 
 	// 检查是否有行被更新（乐观锁检查），查不出来就会影响行数为0
 	if result.RowsAffected == 0 {
-		return errors.New("version conflict: data has been modified by another user")
+		return customerrors.ErrVersionConflict
 	}
 
 	return nil

@@ -1,6 +1,7 @@
 package services
 
 import (
+	customerrors "backend/errors"
 	"backend/models"
 	"errors"
 	"fmt"
@@ -18,11 +19,11 @@ func NewTodoService() *TodoService {
 func (s *TodoService) validateCreateInput(input *models.CreateTodoInput) error {
 	// 标题验证
 	if strings.TrimSpace(input.Title) == "" {
-		return errors.New("title is required and cannot be empty")
+		return customerrors.ErrTitleRequired
 	}
 
 	if len(input.Title) > 255 {
-		return errors.New("title cannot exceed 255 characters")
+		return customerrors.ErrTitleTooLong
 	}
 
 	// 分类验证。空字符串是允许的，会在后续设置为默认值 "life"
@@ -30,13 +31,13 @@ func (s *TodoService) validateCreateInput(input *models.CreateTodoInput) error {
 	if input.Category != "" {
 		validCategories := []string{"work", "study", "life"}
 		if !contains(validCategories, input.Category) {
-			return fmt.Errorf("invalid category: %s, must be one of: work, study, life", input.Category)
+			return customerrors.ErrInvalidCategory(input.Category)
 		}
 	}
 
 	// 优先级验证
 	if input.Priority < 0 || input.Priority > 5 {
-		return errors.New("priority must be between 0 and 5")
+		return customerrors.ErrInvalidPriority
 	}
 
 	return nil
@@ -79,7 +80,7 @@ func (s *TodoService) CreateTodo(input *models.CreateTodoInput) (*models.Todo, e
 
 	// 数据库插入
 	if err := todo.Create(); err != nil {
-		return nil, fmt.Errorf("failed to create todo: %w", err)
+		return nil, customerrors.WrapCreateError(err)
 	}
 
 	return todo, nil
@@ -91,18 +92,18 @@ func (s *TodoService) GetAllTodos(category string, sortBy string) ([]models.Todo
 	if category != "" && category != "all" {
 		validCategories := []string{"work", "study", "life"}
 		if !contains(validCategories, category) {
-			return nil, fmt.Errorf("invalid category: %s, must be one of: work, study, life", category)
+			return nil, customerrors.ErrInvalidCategory(category)
 		}
 	}
 
 	// 验证排序参数
 	if sortBy != "" && sortBy != "priority" && sortBy != "created_at" {
-		return nil, fmt.Errorf("invalid sort parameter: %s, must be: priority or created_at", sortBy)
+		return nil, customerrors.ErrInvalidSort(sortBy)
 	}
 
 	todos, err := models.GetAll(category, sortBy)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get todos: %w", err)
+		return nil, customerrors.WrapQueryError(err)
 	}
 
 	return todos, nil
@@ -111,12 +112,12 @@ func (s *TodoService) GetAllTodos(category string, sortBy string) ([]models.Todo
 // GetTodoByID 根据ID获取待办事项
 func (s *TodoService) GetTodoByID(id uint) (*models.Todo, error) {
 	if id == 0 {
-		return nil, errors.New("invalid id: id must be greater than 0")
+		return nil, customerrors.ErrInvalidID
 	}
 
 	todo, err := models.GetByID(id)
 	if err != nil {
-		return nil, fmt.Errorf("todo not found with id %d: %w", id, err)
+		return nil, customerrors.ErrTodoNotFoundWithID(id)
 	}
 
 	return todo, nil
@@ -126,27 +127,27 @@ func (s *TodoService) GetTodoByID(id uint) (*models.Todo, error) {
 func (s *TodoService) validateUpdateInput(input *models.UpdateTodoInput) error {
 	// 标题验证
 	if strings.TrimSpace(input.Title) == "" {
-		return errors.New("title is required and cannot be empty")
+		return customerrors.ErrTitleRequired
 	}
 
 	if len(input.Title) > 255 {
-		return errors.New("title cannot exceed 255 characters")
+		return customerrors.ErrTitleTooLong
 	}
 
 	// 分类验证（编辑时分类是必填的）
 	validCategories := []string{"work", "study", "life"}
 	if !contains(validCategories, input.Category) {
-		return fmt.Errorf("invalid category: %s, must be one of: work, study, life", input.Category)
+		return customerrors.ErrInvalidCategory(input.Category)
 	}
 
 	// 优先级验证
 	if input.Priority < 0 || input.Priority > 5 {
-		return errors.New("priority must be between 0 and 5")
+		return customerrors.ErrInvalidPriority
 	}
 
 	// 版本号验证
 	if input.Version < 0 {
-		return errors.New("invalid version: version must be non-negative")
+		return customerrors.ErrInvalidVersion
 	}
 
 	return nil
@@ -211,13 +212,13 @@ func (s *TodoService) UpdateTodo(id uint, input *models.UpdateTodoInput) (*model
 				LatestData:      latestTodo,
 			}
 		}
-		return nil, fmt.Errorf("failed to update todo: %w", err)
+		return nil, customerrors.WrapUpdateError(err)
 	}
 
 	// 返回更新后的数据
 	updatedTodo, err := models.GetByID(id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get updated todo: %w", err)
+		return nil, customerrors.WrapGetError(err)
 	}
 
 	return updatedTodo, nil
@@ -226,17 +227,17 @@ func (s *TodoService) UpdateTodo(id uint, input *models.UpdateTodoInput) (*model
 // UpdateTodoStatus 更新待办事项状态
 func (s *TodoService) UpdateTodoStatus(id uint, input *models.UpdateStatusInput) (*models.Todo, error) {
 	if id == 0 {
-		return nil, errors.New("invalid id: id must be greater than 0")
+		return nil, customerrors.ErrInvalidID
 	}
 
 	if input.Version < 0 {
-		return nil, errors.New("invalid version: version must be non-negative")
+		return nil, customerrors.ErrInvalidVersion
 	}
 
 	// 先查询当前记录是否存在
 	existingTodo, err := models.GetByID(id)
 	if err != nil {
-		return nil, fmt.Errorf("todo not found with id %d", id)
+		return nil, customerrors.ErrTodoNotFoundWithID(id)
 	}
 
 	// 乐观锁冲突检测
@@ -279,18 +280,18 @@ func (s *TodoService) UpdateTodoStatus(id uint, input *models.UpdateStatusInput)
 func (s *TodoService) DeleteTodo(id uint) error {
 	// 验证 ID
 	if id == 0 {
-		return errors.New("invalid id: id must be greater than 0")
+		return customerrors.ErrInvalidID
 	}
 
 	// 先检查是否存在
 	_, err := models.GetByID(id)
 	if err != nil {
-		return fmt.Errorf("todo not found with id %d", id)
+		return customerrors.ErrTodoNotFoundWithID(id)
 	}
 
 	// 调用 Model 层删除
 	if err := models.Delete(id); err != nil {
-		return fmt.Errorf("failed to delete todo: %w", err)
+		return customerrors.WrapDeleteError(err)
 	}
 
 	return nil

@@ -1,6 +1,7 @@
 package config
 
 import (
+	customerrors "backend/errors"
 	"fmt"
 	"log"
 
@@ -51,13 +52,13 @@ func InitDB() error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %v", err)
+		return fmt.Errorf("%w: %v", customerrors.ErrDatabaseConnection, err)
 	}
 
 	// 获取底层的 sql.DB 对象，用于配置连接池
 	sqlDB, err := DB.DB()
 	if err != nil {
-		return fmt.Errorf("failed to get sql.DB: %v", err)
+		return fmt.Errorf("%w: %v", customerrors.ErrDatabaseInit, err)
 	}
 
 	// 设置连接池参数
