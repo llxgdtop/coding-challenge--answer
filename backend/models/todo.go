@@ -38,7 +38,7 @@ type CreateTodoInput struct {
 // UpdateStatusInput 更新状态的输入结构
 type UpdateStatusInput struct {
 	Completed bool `json:"completed"`
-	Version   int  `json:"version" binding:"required"`
+	Version   int  `json:"version" binding:"gte=0"` // 版本号必须 >= 0
 }
 
 // UpdateTodoInput 更新待办事项的输入结构
@@ -47,7 +47,7 @@ type UpdateTodoInput struct {
 	Description string `json:"description"` // 描述非必须
 	Category    string `json:"category" binding:"required,oneof=work study life"`
 	Priority    int    `json:"priority" binding:"required,min=0,max=5"`
-	Version     int    `json:"version" binding:"required"` // 乐观锁版本号
+	Version     int    `json:"version" binding:"gte=0"` // 版本号必须 >= 0
 }
 
 // Create 创建待办事项
