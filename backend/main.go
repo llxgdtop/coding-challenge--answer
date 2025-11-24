@@ -2,9 +2,8 @@ package main
 
 import (
 	"backend/config"
+	"backend/router"
 	"log"
-
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -13,18 +12,12 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// 创建 Gin 路由
-	r := gin.Default()
-
-	// 健康检查接口
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
+	// 配置路由
+	r := router.SetupRouter()
 
 	// 启动服务器
 	log.Println("Server starting on :8080")
+	log.Println("API available at: http://localhost:8080/api/todos")
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
